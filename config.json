@@ -1,0 +1,5 @@
+{
+    "logPath": "/var/log/nginx/access.log",
+    "treshold": 20,
+    "time": 10000
+}
