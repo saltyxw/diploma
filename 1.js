@@ -1,73 +1,48 @@
+// quick-block-test.js
 const http = require('http');
 
-const TEST_IPS = [
-    '93.184.216.188',
-    '93.184.216.189',
-    '93.184.216.190',
-    '93.184.216.191'
-];
+console.log('⚡ ШВИДКИЙ ТЕСТ БЛОКУВАННЯ ЗОВНІШНІХ IP');
+console.log('IP: 93.184.216.200 - 110 запитів\n');
 
-console.log('🧪 ТЕСТ IPSet ФУНКЦІОНАЛЬНОСТІ');
-console.log('==============================');
+const testIP = '93.184.216.200';
+let count = 0;
 
-let requestCount = 0;
-
-function sendTestRequest(ip, index) {
-    return new Promise((resolve) => {
-        requestCount++;
-
-        const req = http.request({
-            hostname: 'localhost',
-            port: 80,
-            path: '/api/tasks',
-            method: 'GET',
-            headers: {
-                'X-Real-IP': ip,
-                'User-Agent': `IPSet-Test-${index}`
+function sendRequest() {
+    const req = http.request({
+        hostname: 'localhost',
+        port: 80,
+        path: '/',
+        method: 'GET',
+        headers: {
+            'User-Agent': 'Quick-Block-Test',
+            'X-Forwarded-For': testIP
+        }
+    }, (res) => {
+        res.on('data', () => { });
+        res.on('end', () => {
+            count++;
+            process.stdout.write(`\r📨 Запит ${count}/110`);
+            if (count >= 110) {
+                console.log('\n\n🎯 ТЕСТ ЗАВЕРШЕНО!');
+                console.log(`📊 IP ${testIP} відправив ${count} запитів`);
+                console.log('🔍 Через 10 секунд перевірте:');
+                console.log('   - Консоль reader.js (має бути сповіщення про блокування)');
+                console.log('   - Веб-інтерфейс (blockedIPs має містити цей IP)');
             }
-        }, (res) => {
-            console.log(`📨 Запит ${requestCount}: IP ${ip} - статус ${res.statusCode}`);
-            resolve();
         });
-
-        req.on('error', (err) => {
-            console.log(`📨 Запит ${requestCount}: IP ${ip} - помилка ${err.code}`);
-            resolve();
-        });
-
-        req.end();
     });
+
+    req.on('error', () => {
+        count++;
+        process.stdout.write(`\r📨 Запит ${count}/110 (error)`);
+    });
+    req.end();
 }
 
-async function runIPSetTest() {
-    console.log('🚀 Запуск тесту IPSet...\n');
-
-    // Перша хвиля запитів
-    for (let i = 0; i < 25; i++) {
-        const ip = TEST_IPS[i % TEST_IPS.length];
-        await sendTestRequest(ip, i);
-        await new Promise(resolve => setTimeout(resolve, 50));
+// Інтенсивна атака
+const interval = setInterval(() => {
+    sendRequest();
+    if (count >= 11000) {
+        clearInterval(interval);
     }
-
-    console.log('\n⏳ Чекаємо 5 секунд...');
-    await new Promise(resolve => setTimeout(resolve, 5000));
-
-    // Друга хвиля - має спрацювати блокування
-    console.log('\n🔁 Друга хвиля запитів (має спрацювати блокування)...');
-    for (let i = 25; i < 35; i++) {
-        const ip = TEST_IPS[i % TEST_IPS.length];
-        await sendTestRequest(ip, i);
-        await new Promise(resolve => setTimeout(resolve, 100));
-    }
-
-    console.log('\n🎯 ТЕСТ ЗАВЕРШЕНО!');
-    console.log('==================');
-    console.log('Перевірте:');
-    console.log('   - Чи IPSet спрацював');
-    console.log('   - Статус IPSet в консолі блокувальника');
-    console.log('\n💡 Команди для перевірки:');
-    console.log('   sudo ipset list nginx_blocked_ips');
-    console.log('   sudo iptables -L INPUT -n | grep nginx_blocked_ips');
-}
-
-runIPSetTest();
+}, 80);

@@ -1,5 +1,1 @@
-{
-    "logPath": "/var/log/nginx/access.log",
-    "treshold": 20,
-    "time": 10000
-}
+{"logPath":"/var/log/nginx/access.log","protectionConfig":{"general":{"treshold":100,"time":10000,"blockTime":600},"bruteForce":{"treshold":10,"time":30000,"blockTime":1800},"endpoint":{"treshold":50,"time":15000,"blockTime":1200},"userAgent":{"treshold":5,"time":60000,"blockTime":3600}}}
