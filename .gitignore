@@ -16,7 +16,6 @@ out/
 *.log
 
 # Логи
-logs/
 *.log
 access.log
 error.log
