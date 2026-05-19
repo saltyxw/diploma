@@ -9,6 +9,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+1.js
+2.js
 
 # testing
 /coverage
