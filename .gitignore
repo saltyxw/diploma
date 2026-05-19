@@ -1,5 +1,7 @@
 # Залежності Node.js
 node_modules/
+1.js
+2.js
 
 # Залежності Python
 __pycache__/
