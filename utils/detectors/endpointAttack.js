@@ -1,7 +1,7 @@
 const { redisClient } = require('../../redisClient')
 const config = require('../../config.json')
 const endpointCounter = new Map();
-const { blockIP } = require('../blockIp')
+const { blockIP } = require('../blockIP')
 
 async function detectEndpointAttack(ip, url) {
     const now = Date.now();

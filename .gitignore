@@ -1,1 +1,42 @@
-/node_modules
+# Залежності Node.js
+node_modules/
+
+# Залежності Python
+__pycache__/
+*.pyc
+venv/
+env/
+.python-version
+
+# Фронтенд (Next.js)
+.next/
+out/
+*.log
+
+# Логи
+logs/
+*.log
+access.log
+error.log
+
+# Тимчасові файли
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Редактори коду
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Документи (не код)
+*.docx
+*.pdf
+~$*
+
+# Конфіденційне
+.env
+
+

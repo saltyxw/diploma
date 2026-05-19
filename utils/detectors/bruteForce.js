@@ -1,6 +1,6 @@
 const { redisClient } = require('../../redisClient')
 const config = require('../../config.json')
-const { blockIP } = require('../blockIp')
+const {blockIP} = require('../blockIP')
 
 const failedLoginCounter = new Map();
 

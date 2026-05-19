@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  redis:
+    image: redis
+    container_name: my-redis
+    ports:
+      - "6379:6379"
+
+  nginx:
+    image: nginx
+    container_name: my-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - D:/4C/1sem/project/nginx.conf:/etc/nginx/nginx.conf
+      - D:/4C/1sem/project/logs:/var/log/nginx
+    depends_on:
+      - redis
+
+  ml:
+    build: ./ml
+    container_name: ml-service
+    ports:
+      - "8000:8000"

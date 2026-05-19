@@ -1,114 +1,123 @@
-const { Tail } = require('tail');
-const { Server } = require('socket.io');
-const fs = require('fs').promises
+const { Tail } = require("tail");
+const { Server } = require("socket.io");
+const { exec } = require("child_process");
 
-let config = require("./config.json");
+const { connectRedis, redisClient } = require("./redisClient");
+const {
+  loadConfig,
+  saveConfig,
+  getConfig,
+} = require("./services/configService");
+const { getAllStats } = require("./services/metricsService");
+const { getMLPrediction } = require("./services/mlService");
+const { blockIP } = require("./utils/blockIP");
 
-const { connectRedis, redisClient } = require('./redisClient')
-const { detectBruteForce } = require('./utils/detectors/bruteForce')
-const { detectEndpointAttack } = require('./utils/detectors/endpointAttack')
-const { detectScanning } = require('./utils/detectors/scanning')
-const { detectSuspiciousUA } = require('./utils/detectors/suspiciousUserAgent')
-const { blockIP } = require('./utils/blockIp')
+const { detectBruteForce } = require("./utils/detectors/bruteForce");
+const { detectEndpointAttack } = require("./utils/detectors/endpointAttack");
+const { detectScanning } = require("./utils/detectors/scanning");
+const { detectSuspiciousUA } = require("./utils/detectors/suspiciousUserAgent");
 
-const logRegex = /^(\d{1,3}(?:\.\d{1,3}){3}) - - \[([^\]]+)\] "(\w+) ([^ ]+) HTTP\/[0-9.]+" (\d{3}) (\d+|-) "([^"]*)" "([^"]*)"(?: rt=([0-9.]+))?/;
+const logRegex =
+  /^(\S+) \S+ \S+ \[([^\]]+)\] "(\w+) ([^ ]+) HTTP\/[0-9.]+" (\d{3}) (\d+|-) "([^"]*)" "([^"]*)"/;
+const mlState = new Map();
 
-const ipCounter = new Map();
+const io = new Server(3001, {
+  pingTimeout: 5000,
+  pingInterval: 10000,
+  cors: {
+    origin: ["http://localhost:3000", "http://192.168.0.104:3000"],
+    methods: ["GET", "POST"],
+  },
+});
 
 connectRedis();
 
-const io = new Server(3001, {
-    cors: {
-        origin: ['http://localhost:3000', 'http://192.168.0.104:3000'],
-        methods: ['GET', 'POST']
-    },
-    host: '0.0.0.0'
-});
+io.on("connection", async (socket) => {
+  console.log("Client connected:", socket.id);
 
-io.on('connection', async (socket) => {
-    console.log("Client connected");
-    setInterval(async () => {
-        try {
-            const failedLogin = await redisClient.hGetAll('failedLoginCounter');
-            const endpoints = await redisClient.hGetAll('endpointCounter');
-            const userAgents = await redisClient.hGetAll('userAgentCounter');
-            const blockedIPs = await redisClient.sMembers('blockedIPs');
-            socket.emit("statsUpdate", {
-                blockedIPs,
-                failedLoginCounter: failedLogin,
-                endpointCounter: endpoints,
-                userAgentCounter: userAgents
-            });
-        } catch (err) {
-            console.error('Error sending stats to socket:', err.message);
-        }
-    }, 5000);
-    let config;
+  socket.emit("getConfig", getConfig());
+  const initialStats = await getAllStats();
+  socket.emit("statsUpdate", initialStats);
+
+  socket.on("requestConfig", () => socket.emit("getConfig", getConfig()));
+  socket.on("requestStats", async () =>
+    socket.emit("statsUpdate", await getAllStats()),
+  );
+
+  socket.on("changeConfig", async (newConfig, callback) => {
     try {
-        const raw = await fs.readFile('./config.json', 'utf8');
-        config = JSON.parse(raw);
+      await saveConfig(newConfig, io);
+      if (callback) callback({ ok: true });
     } catch (err) {
-        console.error("Error reading config.json:", err);
-        config = { logPath: '', protectionConfig: {} };
+      if (callback) callback({ ok: false, error: err.message });
     }
+  });
 
-    socket.emit('getConfig', config);
+  socket.on("unblockIP", async (ip) => {
+    await redisClient.sRem("blockedIPs", ip);
+    exec(`sudo iptables -D INPUT -s ${ip} -j DROP`);
+    io.emit("statsUpdate", await getAllStats());
+  });
 
-    socket.on('changeConfig', async (newConfig, ack) => {
-        try {
-            config = { ...config, ...newConfig };
-            await fs.writeFile('./config.json', JSON.stringify(config), 'utf8');
-            ack && ack({ ok: true, config });
-            io.emit('getConfig', config);
-            console.log('Config updated and broadcasted');
-        } catch (err) {
-            console.error('Error saving config:', err);
-            ack && ack({ ok: false, error: err.message });
-        }
-    });
+  socket.on("addToWhitelist", async (ip) => {
+    const config = getConfig();
+    if (!config.whitelist.includes(ip)) {
+      await saveConfig({ whitelist: [...config.whitelist, ip] }, io);
+      await redisClient.sRem("blockedIPs", ip);
+      exec(`sudo iptables -D INPUT -s ${ip} -j DROP`);
+      io.emit("statsUpdate", await getAllStats());
+    }
+  });
 });
 
-console.log(`Watching log file: ${config.logPath}`);
+setInterval(async () => {
+  const stats = await getAllStats();
+  io.emit("statsUpdate", stats);
+}, 1000);
 
-const tail = new Tail(config.logPath);
+async function startTail() {
+  const config = await loadConfig();
+  const tail = new Tail(config.logPath, { useWatchFile: true });
 
-tail.on("line", async function (data) {
-    console.log(data)
+  tail.on("line", async (data) => {
+    console.log("NEW LOG:", data);
+    io.emit("newLogLine", data);
     const match = data.match(logRegex);
-    if (!match) return console.log("Failed to parse line:", data);
+    if (!match) return;
 
-    const [, ip, date, method, url, status, size, referrer, userAgent] = match;
-    const logEntry = { ip, date, method, url, status, size, referrer, userAgent };
-    if (url.includes('/admin') || url.includes('/login') || ['401', '403'].includes(status)) {
-        console.log(logEntry);
-    }
+    const [, ip, , , url, status, , , userAgent] = match;
+    const currentConfig = getConfig();
+    if (currentConfig.whitelist.includes(ip)) return;
 
-
-    const now = Date.now();
     if (detectScanning(ip, url, userAgent)) return;
     if (await detectSuspiciousUA(ip, userAgent)) return;
     if (await detectBruteForce(ip, url, status)) return;
     if (await detectEndpointAttack(ip, url)) return;
 
-    if (!ipCounter.has(ip)) ipCounter.set(ip, []);
-    const timestamps = ipCounter.get(ip);
-    timestamps.push(now);
-    const recent = timestamps.filter(t => now - t <= config.protectionConfig.general.time);
-    ipCounter.set(ip, recent);
-    if (recent.length >= config.protectionConfig.general.treshold) {
-        console.log(` IP ${ip} exceeded request threshold (${recent.length})`);
-        blockIP(ip, config.protectionConfig.general.blockTime, "too_many_requests");
+    if (!mlState.has(ip))
+      mlState.set(ip, {
+        logs: [],
+        lastMLCheck: 0,
+        suspicionCount: 0,
+        isChecking: false,
+      });
+    const state = mlState.get(ip);
+    state.logs.push({ timestamp: Date.now(), url, status, userAgent });
+
+    const mlResult = await getMLPrediction(ip, state);
+    if (mlResult && mlResult.probability >= 0.85) {
+      await blockIP(ip, 3600, "ml_critical_anomaly");
+      return mlState.delete(ip);
     }
 
+    if (
+      state.logs.length >=
+      (currentConfig.protectionConfig.general.treshold || 50)
+    ) {
+      await blockIP(ip, 3600, "too_many_requests");
+      mlState.delete(ip);
+    }
+  });
+}
 
-});
-
-tail.on("error", (err) => {
-    console.error('Error reading log file:', err);
-});
-
-process.on('SIGINT', () => {
-    console.log('\n Stopping monitoring...');
-    tail.unwatch();
-    process.exit(0);
-});
+startTail();
