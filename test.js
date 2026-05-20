@@ -104,34 +104,18 @@ async function sendRequest(scenario, i) {
 
 async function runAll() {
   for (const s of Object.values(SCENARIOS)) {
-    console.log(`\n Атака: ${s.name} | IP: ${s.ip}`);
-    let results = { success: 0, blocked: 0 };
+    console.log(`\nАтака: ${s.name}`);
 
     if (s.isParallel) {
       const promises = Array.from({ length: s.count }).map((_, i) =>
         sendRequest(s, i),
       );
-      const responses = await Promise.all(promises);
-      responses.forEach((status) => {
-        if (status === 200) results.success++;
-        else results.blocked++;
-      });
+      await Promise.all(promises);
     } else {
       for (let i = 0; i < s.count; i++) {
-        const status = await sendRequest(s, i);
-        if (status === 200) {
-          results.success++;
-          process.stdout.write(".");
-        } else {
-          results.blocked++;
-          process.stdout.write("X");
-        }
+        await sendRequest(s, i);
       }
     }
-
-    console.log(
-      `\nРезультат ${s.name}: Дозволено: ${results.success}, ЗАБЛОКОВАНО: ${results.blocked}`,
-    );
 
     await new Promise((r) => setTimeout(r, 1500));
   }
