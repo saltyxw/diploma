@@ -403,18 +403,21 @@ POST /predict
 | Високе навантаження на CPU | Збільшити часове вікно або пороги спрацювання |
 | Логи не з'являються в real-time | Перевірити, що Nginx дійсно пише логи (sudo tail -f /var/log/nginx/access.log) |
 
+
 ### Використані джерела та література
 
-- Офіційна документація Node.js
-- Scikit-learn документація (Random Forest, SMOTE)
-- FastAPI документація
-- Next.js документація
-- Redis документація
-- Docker документація
-- OWASP Top 10 (2021/2025)
-- Документація Nginx
-- "Anomaly Detection in Web Traffic using Machine Learning" - IEEE Xplore
-- SMOTE: Synthetic Minority Over-sampling Technique (JAIR 2002)
+- [Офіційна документація Node.js](https://nodejs.org/docs/latest/api/)
+- [Scikit-learn документація (Random Forest)](https://scikit-learn.org/stable/modules/generated/sklearn.ensemble.RandomForestClassifier.html)
+- [Imbalanced-learn документація (SMOTE)](https://imbalanced-learn.org/stable/references/generated/imblearn.over_sampling.SMOTE.html)
+- [FastAPI документація](https://fastapi.tiangolo.com/)
+- [Next.js документація](https://nextjs.org/docs)
+- [Redis документація](https://redis.io/docs/)
+- [Docker документація](https://docs.docker.com/)
+- [Документація Nginx](https://nginx.org/en/docs/)
+- [Detection of DDoS attack using Random Forest classifier : GitHub repository](https://github.com/DeePawar28/detection-of-ddos-attack-using-random-forest-classifier)
+- [Cyber threat detection machine learning project : GitHub repository](https://github.com/RamadeviKN/cyber-threat-detection-machine-learning-project)
+- [Використання машинного навчання для виявлення аномалій у мережевому трафіку](https://ir.polissiauniver.edu.ua/handle/123456789/16572)
+- [SMOTE: Synthetic Minority Over-sampling Technique (JAIR 2002)](https://www.jair.org/index.php/jair/article/view/10302)
 
 **Посилання на код**
 
