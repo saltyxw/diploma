@@ -29,7 +29,7 @@ train_ips, test_ips = train_test_split(
 )
 
 train_df = df[df["ip"].isin(train_ips)]
-test_df  = df[df["ip"].isin(test_ips)]
+test_df = df[df["ip"].isin(test_ips)]
 
 X_train = train_df[FEATURES]
 y_train = train_df["label"]
@@ -38,6 +38,9 @@ groups_train = train_df["ip"]
 X_test = test_df[FEATURES]
 y_test = test_df["label"]
 
+print(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
+print(f"Train attack ratio: {y_train.mean():.2%}")
+print(f"Test attack ratio: {y_test.mean():.2%}")
 
 gkf = GroupKFold(n_splits=5)
 
@@ -67,13 +70,12 @@ for n_estimators in param_grid["n_estimators"]:
             for min_samples_leaf in param_grid["min_samples_leaf"]:
 
                 count += 1
-                print(f" Progress: {count}/{total}")
+                print(f"Progress: {count}/{total} - n_est={n_estimators}, depth={max_depth}")
 
                 fold_f1 = []
                 fold_thresholds = []
 
                 for tr_idx, val_idx in gkf.split(X_train, y_train, groups=groups_train):
-
                     X_tr, X_val = X_train.iloc[tr_idx], X_train.iloc[val_idx]
                     y_tr, y_val = y_train.iloc[tr_idx], y_train.iloc[val_idx]
 
@@ -97,7 +99,7 @@ for n_estimators in param_grid["n_estimators"]:
                     best_fold_f1 = 0
                     best_fold_thr = 0.5
 
-                    for thr in np.arange(0.2, 0.8, 0.05):
+                    for thr in np.arange(0.2, 0.8, 0.02):
                         preds = (probs >= thr).astype(int)
                         f1 = f1_score(y_val, preds)
 
@@ -120,10 +122,11 @@ for n_estimators in param_grid["n_estimators"]:
                         "min_samples_leaf": min_samples_leaf,
                     }
 
-print("\n Best params:", best_params)
-print(" Best F1 (CV):", best_f1)
-print(" Best threshold:", round(best_threshold, 2))
-
+print("\n" + "="*50)
+print("BEST PARAMS:", best_params)
+print(f"BEST F1 (CV): {best_f1:.4f}")
+print(f"BEST THRESHOLD: {best_threshold:.3f}")
+print("="*50)
 
 smote = SMOTE(random_state=42)
 X_train_sm, y_train_sm = smote.fit_resample(X_train, y_train)
@@ -137,27 +140,34 @@ final_model = RandomForestClassifier(
 
 final_model.fit(X_train_sm, y_train_sm)
 
-
 probs_test = final_model.predict_proba(X_test)[:, 1]
 pred_test = (probs_test >= best_threshold).astype(int)
 
-print("\n Confusion Matrix (test):")
+print("\n" + "="*50)
+print("CONFUSION MATRIX (test):")
 print(confusion_matrix(y_test, pred_test))
 
-print("\n Classification Report (test):")
-print(classification_report(y_test, pred_test))
+print("\nCLASSIFICATION REPORT (test):")
+print(classification_report(y_test, pred_test, target_names=["Normal", "Attack"]))
 
-print(" Accuracy:", accuracy_score(y_test, pred_test))
-print(" ROC AUC:", roc_auc_score(y_test, probs_test))
+print(f"Accuracy: {accuracy_score(y_test, pred_test):.4f}")
+print(f"ROC AUC: {roc_auc_score(y_test, probs_test):.4f}")
+print(f"F1 Score: {f1_score(y_test, pred_test):.4f}")
 
+fp = ((pred_test == 1) & (y_test == 0)).sum()
+fn = ((pred_test == 0) & (y_test == 1)).sum()
+print(f"\nError Analysis:")
+print(f"False Positives (legit blocked): {fp}")
+print(f"False Negatives (attacks missed): {fn}")
 
 joblib.dump(
     {
         "model": final_model,
         "threshold": best_threshold,
-        "features": FEATURES
+        "features": FEATURES,
+        "cv_f1": best_f1
     },
     "model.pkl"
 )
 
-print(" model saved")
+print("\nModel saved to model.pkl")
